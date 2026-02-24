@@ -342,6 +342,19 @@
       backdrop-filter: blur(6px);
       white-space: nowrap;
     }
+    .track.entries{
+      height: 34px;
+    }
+    .entryDot{
+      position:absolute;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      transform: translate(-50%, -50%);
+      background: #7aa2ff;
+      border: 1px solid rgba(255,255,255,.45);
+      box-shadow: 0 0 0 3px rgba(122,162,255,.18);
+    }
 
     .empty{
       color: var(--muted);
@@ -361,8 +374,8 @@
   <header>
     <h1>Historical novel ←——→ Period novel (Survey Visualizer)</h1>
     <p>
-      Enter each reading and student responses (0–100). The app calculates averages, counts, and standard deviation,
-      and plots each reading on a 0–100 spectrum.
+      Enter each reading and student responses. The app summarizes each reading with a relative center and spread,
+      then plots all readings across the historical-to-period spectrum.
     </p>
   </header>
 
@@ -374,7 +387,7 @@
         <label for="titleInput">Reading title</label>
         <input id="titleInput" type="text" placeholder="e.g., The Things They Carried" />
 
-        <label for="responsesInput">Responses (0–100)</label>
+        <label for="responsesInput">Responses (lower to higher)</label>
         <textarea id="responsesInput" placeholder="Enter numbers separated by commas, spaces, or new lines.
 Example: 10, 25, 40 55
 70"></textarea>
@@ -389,7 +402,7 @@ Example: 10, 25, 40 55
         <div class="hint">
           Tips:
           <ul>
-            <li>Responses outside <span class="pill">0–100</span> are ignored.</li>
+            <li>Responses outside the spectrum range are ignored.</li>
             <li>Non-numeric text is ignored (so you can paste messy lists).</li>
             <li>Data is saved locally in your browser (localStorage).</li>
           </ul>
@@ -409,9 +422,10 @@ Example: 10, 25, 40 55
         <h2>Spectrum plot</h2>
         <div class="header-actions">
           <div class="legend" aria-label="Legend">
-            <span><span class="band"></span>±1 SD</span>
-            <span><span class="dot"></span>Average</span>
+            <span id="bandLegend"><span class="band"></span>Spread band</span>
+            <span id="dotLegend"><span class="dot"></span>Average</span>
           </div>
+          <button class="btn small" id="toggleViewBtn" title="Toggle between average and raw entry views">Show entries</button>
           <button class="btn small" id="copyPngBtn" title="Copy chart image as PNG">Copy PNG</button>
         </div>
       </div>
@@ -420,7 +434,7 @@ Example: 10, 25, 40 55
         <div class="axis" aria-hidden="true">
           <div class="axisline"></div>
           <div class="ticks">
-            <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+            <span>•</span><span>•</span><span>•</span><span>•</span><span>•</span>
           </div>
           <div class="axislabels">
             <span>Historical novel</span>
@@ -452,7 +466,10 @@ Example: 10, 25, 40 55
       cancelEditBtn: document.getElementById("cancelEditBtn"),
       seedBtn: document.getElementById("seedBtn"),
       clearBtn: document.getElementById("clearBtn"),
+      toggleViewBtn: document.getElementById("toggleViewBtn"),
       copyPngBtn: document.getElementById("copyPngBtn"),
+      bandLegend: document.getElementById("bandLegend"),
+      dotLegend: document.getElementById("dotLegend"),
       readingList: document.getElementById("readingList"),
       plotArea: document.getElementById("plotArea"),
       emptyState: document.getElementById("emptyState"),
@@ -461,6 +478,7 @@ Example: 10, 25, 40 55
 
     let readings = loadReadings();
     let editingId = null;
+    let plotMode = "average";
 
     function uid(){
       return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
@@ -495,6 +513,26 @@ Example: 10, 25, 40 55
       const m = mean(arr);
       const variance = arr.reduce((acc, x) => acc + (x - m) ** 2, 0) / (arr.length - 1);
       return Math.sqrt(variance);
+    }
+
+    function relativeCenterLabel(value){
+      if (value <= 20) return "Strongly historical";
+      if (value <= 40) return "Historical-leaning";
+      if (value <= 60) return "Balanced";
+      if (value <= 80) return "Period-leaning";
+      return "Strongly period";
+    }
+
+    function relativeSpreadLabel(value){
+      if (value < 10) return "Narrow";
+      if (value < 20) return "Moderate";
+      return "Wide";
+    }
+
+    function relativeParticipationLabel(count){
+      if (count <= 4) return "Small group";
+      if (count <= 9) return "Mid-sized group";
+      return "Large group";
     }
 
     function saveReadings(){
@@ -562,7 +600,7 @@ Example: 10, 25, 40 55
         return;
       }
       if (responses.length === 0){
-        alert("Please enter at least one valid response (a number between 0 and 100).");
+        alert("Please enter at least one valid response in the supported range.");
         return;
       }
 
@@ -616,12 +654,29 @@ Example: 10, 25, 40 55
       els.exportStatus.textContent = message;
     }
 
+    function applyModeUI(){
+      const isEntries = plotMode === "entries";
+      els.toggleViewBtn.textContent = isEntries ? "Show averages" : "Show entries";
+      els.bandLegend.style.display = isEntries ? "none" : "inline";
+      els.dotLegend.innerHTML = `<span class="dot"></span>${isEntries ? "Response dot" : "Center dot"}`;
+    }
+
+    function togglePlotMode(){
+      plotMode = plotMode === "average" ? "entries" : "average";
+      applyModeUI();
+      renderPlot();
+    }
+
     function sortedReadingsByAverage(){
       return [...readings].sort((a,b) => mean(a.responses) - mean(b.responses));
     }
 
-    function drawExportImage(){
-      const sorted = sortedReadingsByAverage();
+    function entryLane(index){
+      const lanes = [50, 36, 64, 28, 72];
+      return lanes[index % lanes.length];
+    }
+
+    function drawExportAverageImage(sorted){
       const width = 1600;
       const rowHeight = 90;
       const chartTop = 290;
@@ -656,12 +711,7 @@ Example: 10, 25, 40 55
 
       ctx.fillStyle = "rgba(210,220,255,0.86)";
       ctx.font = "500 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
-      ctx.fillText("Average with ±1 standard deviation", 88, 136);
-
-      const now = new Date();
-      ctx.fillStyle = "rgba(170,182,218,0.86)";
-      ctx.font = "500 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
-      ctx.fillText(`Generated ${now.toLocaleString()}`, 88, 170);
+      ctx.fillText("Relative center and spread", 88, 136);
 
       const axisLeft = 88;
       const axisRight = canvas.width - 88;
@@ -675,11 +725,14 @@ Example: 10, 25, 40 55
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.fillStyle = "rgba(170,182,218,0.9)";
-      ctx.font = "500 19px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+      ctx.strokeStyle = "rgba(170,182,218,0.8)";
+      ctx.lineWidth = 2;
       for (const tick of [0, 25, 50, 75, 100]){
         const x = axisLeft + (axisWidth * tick / 100);
-        ctx.fillText(String(tick), x - 10, axisY + 48);
+        ctx.beginPath();
+        ctx.moveTo(x, axisY + 28);
+        ctx.lineTo(x, axisY + 38);
+        ctx.stroke();
       }
 
       ctx.fillText("Historical novel", axisLeft, axisY + 78);
@@ -707,12 +760,6 @@ Example: 10, 25, 40 55
         ctx.font = "700 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
         ctx.fillText(r.title, axisLeft + 14, y - 8);
 
-        const stats = `Avg ${m.toFixed(1)} • n=${r.responses.length} • SD ${sd.toFixed(1)}`;
-        ctx.fillStyle = "rgba(170,182,218,0.95)";
-        ctx.font = "500 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
-        const statsWidth = ctx.measureText(stats).width;
-        ctx.fillText(stats, axisRight - statsWidth - 14, y - 8);
-
         const trackY = y + 6;
         roundedRect(ctx, axisLeft + 14, trackY, axisWidth - 28, 16, 8);
         ctx.fillStyle = "rgba(255,255,255,0.07)";
@@ -738,25 +785,127 @@ Example: 10, 25, 40 55
         ctx.strokeStyle = "rgba(255,255,255,0.45)";
         ctx.stroke();
 
-        const badge = m.toFixed(1);
-        ctx.font = "700 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
-        const padX = 10;
-        const badgeW = ctx.measureText(badge).width + padX * 2;
-        const badgeH = 28;
-        const badgeX = Math.min(trackLeft + trackWidth - badgeW, dotX + 14);
-        const badgeY = dotY - (badgeH / 2);
-        roundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 14);
-        ctx.fillStyle = "rgba(8,10,18,0.70)";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.20)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.fillStyle = "rgba(236,242,255,0.95)";
-        ctx.fillText(badge, badgeX + padX, badgeY + 19);
       }
 
       return canvas;
+    }
+
+    function drawExportEntriesImage(sorted){
+      const width = 1600;
+      const rowHeight = 104;
+      const chartTop = 290;
+      const chartBottomPad = 56;
+      const height = chartTop + (sorted.length * rowHeight) + chartBottomPad;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = Math.max(520, height);
+      const ctx = canvas.getContext("2d");
+
+      const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      bg.addColorStop(0, "#0b1220");
+      bg.addColorStop(1, "#070b15");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const glowA = ctx.createRadialGradient(260, 140, 0, 260, 140, 520);
+      glowA.addColorStop(0, "rgba(58, 103, 255, 0.30)");
+      glowA.addColorStop(1, "rgba(58, 103, 255, 0)");
+      ctx.fillStyle = glowA;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const glowB = ctx.createRadialGradient(1380, 120, 0, 1380, 120, 520);
+      glowB.addColorStop(0, "rgba(146, 62, 255, 0.28)");
+      glowB.addColorStop(1, "rgba(146, 62, 255, 0)");
+      ctx.fillStyle = glowB;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
+      ctx.font = "700 46px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+      ctx.fillText("Historical ↔ Period Novel Spectrum", 88, 96);
+
+      ctx.fillStyle = "rgba(210,220,255,0.86)";
+      ctx.font = "500 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+      ctx.fillText("Relative response distribution", 88, 136);
+
+      const axisLeft = 88;
+      const axisRight = canvas.width - 88;
+      const axisWidth = axisRight - axisLeft;
+      const axisY = 216;
+
+      roundedRect(ctx, axisLeft, axisY, axisWidth, 16, 8);
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(170,182,218,0.8)";
+      ctx.lineWidth = 2;
+      for (const tick of [0, 25, 50, 75, 100]){
+        const x = axisLeft + (axisWidth * tick / 100);
+        ctx.beginPath();
+        ctx.moveTo(x, axisY + 28);
+        ctx.lineTo(x, axisY + 38);
+        ctx.stroke();
+      }
+
+      ctx.fillText("Historical novel", axisLeft, axisY + 78);
+      const periodText = "Period novel";
+      const periodWidth = ctx.measureText(periodText).width;
+      ctx.fillText(periodText, axisRight - periodWidth, axisY + 78);
+
+      const rowStartY = 302;
+      for (let i = 0; i < sorted.length; i++){
+        const r = sorted[i];
+        const y = rowStartY + (i * rowHeight);
+
+        roundedRect(ctx, axisLeft, y - 38, axisWidth, 82, 16);
+        ctx.fillStyle = "rgba(255,255,255,0.045)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(234,239,255,0.96)";
+        ctx.font = "700 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+        ctx.fillText(r.title, axisLeft + 14, y - 10);
+
+        const trackY = y + 8;
+        roundedRect(ctx, axisLeft + 14, trackY, axisWidth - 28, 34, 10);
+        ctx.fillStyle = "rgba(255,255,255,0.07)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.stroke();
+
+        const trackLeft = axisLeft + 14;
+        const trackWidth = axisWidth - 28;
+        const seen = new Map();
+        for (const response of r.responses){
+          const key = response.toFixed(2);
+          const depth = seen.get(key) || 0;
+          seen.set(key, depth + 1);
+
+          const x = trackLeft + (trackWidth * clamp(response, 0, 100) / 100);
+          const yPct = entryLane(depth);
+          const dotY = trackY + (34 * yPct / 100);
+          ctx.beginPath();
+          ctx.arc(x, dotY, 5, 0, Math.PI * 2);
+          ctx.fillStyle = "#7aa2ff";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.55)";
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        }
+      }
+
+      return canvas;
+    }
+
+    function drawExportImage(){
+      const sorted = sortedReadingsByAverage();
+      return plotMode === "entries"
+        ? drawExportEntriesImage(sorted)
+        : drawExportAverageImage(sorted);
     }
 
     function canvasToBlob(canvas){
@@ -833,7 +982,7 @@ Example: 10, 25, 40 55
 
         const meta = document.createElement("p");
         meta.className = "meta";
-        meta.textContent = `Avg: ${m.toFixed(1)} • n=${r.responses.length} • SD: ${sd.toFixed(1)}`;
+        meta.textContent = `Center: ${relativeCenterLabel(m)} • Spread: ${relativeSpreadLabel(sd)} • Participation: ${relativeParticipationLabel(r.responses.length)}`;
 
         left.appendChild(title);
         left.appendChild(meta);
@@ -869,16 +1018,9 @@ Example: 10, 25, 40 55
       if (!readings.length) return;
 
       // Sort by average (optional, makes chart easier to scan)
-      const sorted = [...readings].sort((a,b) => mean(a.responses) - mean(b.responses));
+      const sorted = sortedReadingsByAverage();
 
       for (const r of sorted){
-        const m = mean(r.responses);
-        const sd = stdev(r.responses);
-
-        // SD band is mean ± sd, clamped to [0,100]
-        const bandL = clamp(m - sd, 0, 100);
-        const bandR = clamp(m + sd, 0, 100);
-
         const row = document.createElement("div");
         row.className = "plotrow";
 
@@ -888,35 +1030,48 @@ Example: 10, 25, 40 55
         const rtitle = document.createElement("p");
         rtitle.className = "rtitle";
         rtitle.textContent = r.title;
-
-        const rstats = document.createElement("div");
-        rstats.className = "rstats";
-        rstats.textContent = `Avg ${m.toFixed(1)} • n=${r.responses.length} • SD ${sd.toFixed(1)}`;
-
         head.appendChild(rtitle);
-        head.appendChild(rstats);
 
         const track = document.createElement("div");
         track.className = "track";
 
-        const band = document.createElement("div");
-        band.className = "sdBand";
-        band.style.left = `${bandL}%`;
-        band.style.width = `${Math.max(0, bandR - bandL)}%`;
+        if (plotMode === "entries"){
+          track.classList.add("entries");
 
-        const dot = document.createElement("div");
-        dot.className = "avgDot";
-        dot.style.left = `${clamp(m, 0, 100)}%`;
-        dot.title = `Average: ${m.toFixed(2)}`;
+          const seen = new Map();
+          for (const response of r.responses){
+            const key = response.toFixed(2);
+            const depth = seen.get(key) || 0;
+            seen.set(key, depth + 1);
 
-        const label = document.createElement("div");
-        label.className = "avgLabel";
-        label.style.left = `${clamp(m, 0, 100)}%`;
-        label.textContent = `${m.toFixed(1)}`;
+            const dot = document.createElement("div");
+            dot.className = "entryDot";
+            dot.style.left = `${clamp(response, 0, 100)}%`;
+            dot.style.top = `${entryLane(depth)}%`;
+            dot.title = "Response position";
+            track.appendChild(dot);
+          }
+        }else{
+          const m = mean(r.responses);
+          const sd = stdev(r.responses);
 
-        track.appendChild(band);
-        track.appendChild(dot);
-        track.appendChild(label);
+          // SD band is mean ± sd, clamped to [0,100]
+          const bandL = clamp(m - sd, 0, 100);
+          const bandR = clamp(m + sd, 0, 100);
+
+          const band = document.createElement("div");
+          band.className = "sdBand";
+          band.style.left = `${bandL}%`;
+          band.style.width = `${Math.max(0, bandR - bandL)}%`;
+
+          const dot = document.createElement("div");
+          dot.className = "avgDot";
+          dot.style.left = `${clamp(m, 0, 100)}%`;
+          dot.title = "Center position";
+
+          track.appendChild(band);
+          track.appendChild(dot);
+        }
 
         row.appendChild(head);
         row.appendChild(track);
@@ -935,9 +1090,11 @@ Example: 10, 25, 40 55
     els.cancelEditBtn.addEventListener("click", resetForm);
     els.seedBtn.addEventListener("click", seedSample);
     els.clearBtn.addEventListener("click", clearAll);
+    els.toggleViewBtn.addEventListener("click", togglePlotMode);
     els.copyPngBtn.addEventListener("click", copyPlotAsPng);
 
     // Initial render
+    applyModeUI();
     render();
   </script>
 </body>
