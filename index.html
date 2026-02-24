@@ -219,6 +219,17 @@
       font-size: 12px;
       align-items:center;
     }
+    .header-actions{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      margin-left: auto;
+    }
+    .export-status{
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 1em;
+    }
     .dot{
       width:10px; height:10px; border-radius:999px;
       background: var(--accent);
@@ -396,9 +407,12 @@ Example: 10, 25, 40 55
     <section class="card" aria-label="Visualization">
       <div class="spectrum-header">
         <h2>Spectrum plot</h2>
-        <div class="legend" aria-label="Legend">
-          <span><span class="band"></span>±1 SD</span>
-          <span><span class="dot"></span>Average</span>
+        <div class="header-actions">
+          <div class="legend" aria-label="Legend">
+            <span><span class="band"></span>±1 SD</span>
+            <span><span class="dot"></span>Average</span>
+          </div>
+          <button class="btn small" id="copyPngBtn" title="Copy chart image as PNG">Copy PNG</button>
         </div>
       </div>
 
@@ -418,6 +432,7 @@ Example: 10, 25, 40 55
         <div class="empty" id="emptyState" style="display:none;">
           No readings yet. Add one on the left (or click <b>Load sample data</b>) to see the visualization.
         </div>
+        <div class="export-status" id="exportStatus" aria-live="polite"></div>
       </div>
     </section>
   </main>
@@ -437,9 +452,11 @@ Example: 10, 25, 40 55
       cancelEditBtn: document.getElementById("cancelEditBtn"),
       seedBtn: document.getElementById("seedBtn"),
       clearBtn: document.getElementById("clearBtn"),
+      copyPngBtn: document.getElementById("copyPngBtn"),
       readingList: document.getElementById("readingList"),
       plotArea: document.getElementById("plotArea"),
       emptyState: document.getElementById("emptyState"),
+      exportStatus: document.getElementById("exportStatus"),
     };
 
     let readings = loadReadings();
@@ -584,6 +601,210 @@ Example: 10, 25, 40 55
       resetForm();
     }
 
+    function roundedRect(ctx, x, y, width, height, radius){
+      const r = Math.min(radius, width / 2, height / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + width, y, x + width, y + height, r);
+      ctx.arcTo(x + width, y + height, x, y + height, r);
+      ctx.arcTo(x, y + height, x, y, r);
+      ctx.arcTo(x, y, x + width, y, r);
+      ctx.closePath();
+    }
+
+    function setExportStatus(message){
+      els.exportStatus.textContent = message;
+    }
+
+    function sortedReadingsByAverage(){
+      return [...readings].sort((a,b) => mean(a.responses) - mean(b.responses));
+    }
+
+    function drawExportImage(){
+      const sorted = sortedReadingsByAverage();
+      const width = 1600;
+      const rowHeight = 90;
+      const chartTop = 290;
+      const chartBottomPad = 56;
+      const height = chartTop + (sorted.length * rowHeight) + chartBottomPad;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = Math.max(520, height);
+      const ctx = canvas.getContext("2d");
+
+      const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      bg.addColorStop(0, "#0b1220");
+      bg.addColorStop(1, "#070b15");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const glowA = ctx.createRadialGradient(260, 140, 0, 260, 140, 520);
+      glowA.addColorStop(0, "rgba(58, 103, 255, 0.30)");
+      glowA.addColorStop(1, "rgba(58, 103, 255, 0)");
+      ctx.fillStyle = glowA;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const glowB = ctx.createRadialGradient(1380, 120, 0, 1380, 120, 520);
+      glowB.addColorStop(0, "rgba(146, 62, 255, 0.28)");
+      glowB.addColorStop(1, "rgba(146, 62, 255, 0)");
+      ctx.fillStyle = glowB;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
+      ctx.font = "700 46px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+      ctx.fillText("Historical ↔ Period Novel Spectrum", 88, 96);
+
+      ctx.fillStyle = "rgba(210,220,255,0.86)";
+      ctx.font = "500 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+      ctx.fillText("Average with ±1 standard deviation", 88, 136);
+
+      const now = new Date();
+      ctx.fillStyle = "rgba(170,182,218,0.86)";
+      ctx.font = "500 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+      ctx.fillText(`Generated ${now.toLocaleString()}`, 88, 170);
+
+      const axisLeft = 88;
+      const axisRight = canvas.width - 88;
+      const axisWidth = axisRight - axisLeft;
+      const axisY = 216;
+
+      roundedRect(ctx, axisLeft, axisY, axisWidth, 16, 8);
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(170,182,218,0.9)";
+      ctx.font = "500 19px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+      for (const tick of [0, 25, 50, 75, 100]){
+        const x = axisLeft + (axisWidth * tick / 100);
+        ctx.fillText(String(tick), x - 10, axisY + 48);
+      }
+
+      ctx.fillText("Historical novel", axisLeft, axisY + 78);
+      const periodText = "Period novel";
+      const periodWidth = ctx.measureText(periodText).width;
+      ctx.fillText(periodText, axisRight - periodWidth, axisY + 78);
+
+      const rowStartY = 300;
+      for (let i = 0; i < sorted.length; i++){
+        const r = sorted[i];
+        const y = rowStartY + (i * rowHeight);
+        const m = mean(r.responses);
+        const sd = stdev(r.responses);
+        const bandL = clamp(m - sd, 0, 100);
+        const bandR = clamp(m + sd, 0, 100);
+
+        roundedRect(ctx, axisLeft, y - 34, axisWidth, 70, 16);
+        ctx.fillStyle = "rgba(255,255,255,0.045)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(234,239,255,0.96)";
+        ctx.font = "700 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+        ctx.fillText(r.title, axisLeft + 14, y - 8);
+
+        const stats = `Avg ${m.toFixed(1)} • n=${r.responses.length} • SD ${sd.toFixed(1)}`;
+        ctx.fillStyle = "rgba(170,182,218,0.95)";
+        ctx.font = "500 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+        const statsWidth = ctx.measureText(stats).width;
+        ctx.fillText(stats, axisRight - statsWidth - 14, y - 8);
+
+        const trackY = y + 6;
+        roundedRect(ctx, axisLeft + 14, trackY, axisWidth - 28, 16, 8);
+        ctx.fillStyle = "rgba(255,255,255,0.07)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.stroke();
+
+        const trackLeft = axisLeft + 14;
+        const trackWidth = axisWidth - 28;
+        const bandX = trackLeft + (trackWidth * bandL / 100);
+        const bandW = Math.max(2, trackWidth * (bandR - bandL) / 100);
+        roundedRect(ctx, bandX, trackY, bandW, 16, 8);
+        ctx.fillStyle = "rgba(122,162,255,0.30)";
+        ctx.fill();
+
+        const dotX = trackLeft + (trackWidth * clamp(m, 0, 100) / 100);
+        const dotY = trackY + 8;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 9, 0, Math.PI * 2);
+        ctx.fillStyle = "#7aa2ff";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(255,255,255,0.45)";
+        ctx.stroke();
+
+        const badge = m.toFixed(1);
+        ctx.font = "700 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+        const padX = 10;
+        const badgeW = ctx.measureText(badge).width + padX * 2;
+        const badgeH = 28;
+        const badgeX = Math.min(trackLeft + trackWidth - badgeW, dotX + 14);
+        const badgeY = dotY - (badgeH / 2);
+        roundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 14);
+        ctx.fillStyle = "rgba(8,10,18,0.70)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.20)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(236,242,255,0.95)";
+        ctx.fillText(badge, badgeX + padX, badgeY + 19);
+      }
+
+      return canvas;
+    }
+
+    function canvasToBlob(canvas){
+      return new Promise(resolve => canvas.toBlob(resolve, "image/png", 1));
+    }
+
+    function downloadBlob(blob, filename){
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function copyPlotAsPng(){
+      if (!readings.length){
+        alert("Add at least one reading before exporting an image.");
+        return;
+      }
+
+      els.copyPngBtn.disabled = true;
+      setExportStatus("Creating PNG...");
+
+      try{
+        const canvas = drawExportImage();
+        const blob = await canvasToBlob(canvas);
+        if (!blob) throw new Error("PNG generation failed");
+
+        if (window.ClipboardItem && navigator.clipboard?.write){
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          setExportStatus("PNG copied to clipboard. Paste it anywhere.");
+        }else{
+          downloadBlob(blob, "reading-spectrum.png");
+          setExportStatus("Clipboard image not supported in this browser. PNG downloaded instead.");
+        }
+      }catch (error){
+        setExportStatus("Clipboard blocked. Downloading PNG instead.");
+        const canvas = drawExportImage();
+        const blob = await canvasToBlob(canvas);
+        if (blob) downloadBlob(blob, "reading-spectrum.png");
+      }finally{
+        els.copyPngBtn.disabled = false;
+      }
+    }
+
     function renderList(){
       els.readingList.innerHTML = "";
 
@@ -714,6 +935,7 @@ Example: 10, 25, 40 55
     els.cancelEditBtn.addEventListener("click", resetForm);
     els.seedBtn.addEventListener("click", seedSample);
     els.clearBtn.addEventListener("click", clearAll);
+    els.copyPngBtn.addEventListener("click", copyPlotAsPng);
 
     // Initial render
     render();
