@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Historical ↔ Period Novel Survey Visualizer</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#111a2e;
+      --panel2:#0f1730;
+      --text:#e9eefc;
+      --muted:#aab6da;
+      --border:rgba(255,255,255,.12);
+      --accent:#7aa2ff;
+      --danger:#ff6b6b;
+      --ok:#35d39d;
+      --warn:#ffd166;
+      --band: rgba(122, 162, 255, .22);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 14px;
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: var(--font);
+      color: var(--text);
+      background: radial-gradient(1100px 700px at 15% 10%, #1a2a6a 0%, transparent 55%),
+                  radial-gradient(900px 600px at 85% 20%, #2a125c 0%, transparent 60%),
+                  linear-gradient(180deg, var(--bg), #070b15);
+      min-height:100vh;
+    }
+
+    header{
+      padding: 28px 18px 10px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1{
+      margin: 0 0 6px;
+      font-size: clamp(20px, 2.4vw, 32px);
+      letter-spacing: .2px;
+    }
+    header p{
+      margin:0;
+      color: var(--muted);
+      max-width: 72ch;
+      line-height: 1.45;
+    }
+
+    .wrap{
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px 18px 34px;
+      display:grid;
+      grid-template-columns: 380px 1fr;
+      gap: 16px;
+      align-items:start;
+    }
+    @media (max-width: 940px){
+      .wrap{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card .body{ padding: 14px; }
+    .card h2{
+      font-size: 16px;
+      margin: 0;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,.12);
+      letter-spacing: .2px;
+    }
+
+    label{
+      display:block;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 10px 0 6px;
+    }
+    input[type="text"], textarea{
+      width:100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      padding: 10px 12px;
+      outline: none;
+    }
+    textarea{
+      min-height: 86px;
+      resize: vertical;
+      line-height: 1.35;
+    }
+    input:focus, textarea:focus{
+      border-color: rgba(122,162,255,.65);
+      box-shadow: 0 0 0 3px rgba(122,162,255,.16);
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .btn{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-weight: 650;
+      letter-spacing: .2px;
+      transition: transform .06s ease, background .12s ease, border-color .12s ease;
+      user-select:none;
+    }
+    .btn:hover{ background: rgba(255,255,255,.09); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{
+      background: rgba(122,162,255,.18);
+      border-color: rgba(122,162,255,.45);
+    }
+    .btn.primary:hover{ background: rgba(122,162,255,.24); }
+    .btn.danger{
+      background: rgba(255,107,107,.12);
+      border-color: rgba(255,107,107,.35);
+    }
+    .btn.ghost{
+      background: transparent;
+    }
+    .hint{
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+      margin-top: 10px;
+    }
+    .pill{
+      display:inline-block;
+      font-size: 12px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(0,0,0,.10);
+    }
+
+    /* List */
+    .list{
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 14px 14px;
+    }
+    .item{
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 12px;
+      background: rgba(0,0,0,.14);
+    }
+    .item .top{
+      display:flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .title{
+      font-weight: 750;
+      letter-spacing: .2px;
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+    .meta{
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .item .actions{
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .btn.small{ padding: 7px 10px; border-radius: 11px; font-size: 12px; }
+
+    /* Chart area */
+    .chart{
+      padding: 12px 14px 16px;
+    }
+    .spectrum-header{
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,.12);
+    }
+    .spectrum-header h2{
+      border: none;
+      background: transparent;
+      padding: 0;
+    }
+    .legend{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+      align-items:center;
+    }
+    .dot{
+      width:10px; height:10px; border-radius:999px;
+      background: var(--accent);
+      display:inline-block;
+      box-shadow: 0 0 0 3px rgba(122,162,255,.22);
+      margin-right: 6px;
+    }
+    .band{
+      width:16px; height:10px; border-radius: 999px;
+      background: var(--band);
+      border: 1px solid rgba(122,162,255,.32);
+      display:inline-block;
+      margin-right: 6px;
+    }
+
+    .axis{
+      margin: 14px 0 8px;
+      padding: 10px 10px 0;
+    }
+    .axisline{
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+      border: 1px solid var(--border);
+      position: relative;
+    }
+    .ticks{
+      display:flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 6px;
+      padding: 0 2px;
+    }
+    .axislabels{
+      display:flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+      padding: 0 2px;
+    }
+
+    .plot{
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 2px 10px 12px;
+    }
+    .plotrow{
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.10);
+      border-radius: 14px;
+      padding: 10px 10px;
+    }
+    .plotrow .rowhead{
+      display:flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .plotrow .rowhead .rtitle{
+      margin:0;
+      font-weight: 750;
+      font-size: 13px;
+      line-height: 1.25;
+    }
+    .plotrow .rowhead .rstats{
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .track{
+      position: relative;
+      height: 18px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .sdBand{
+      position:absolute;
+      top:0; bottom:0;
+      background: var(--band);
+      border-left: 1px solid rgba(122,162,255,.30);
+      border-right: 1px solid rgba(122,162,255,.30);
+    }
+    .avgDot{
+      position:absolute;
+      top:50%;
+      width: 12px; height: 12px;
+      transform: translate(-50%, -50%);
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(122,162,255,.18);
+      border: 1px solid rgba(255,255,255,.25);
+    }
+    .avgLabel{
+      position:absolute;
+      top: 50%;
+      transform: translate(10px, -50%);
+      font-size: 12px;
+      color: var(--text);
+      background: rgba(0,0,0,.35);
+      border: 1px solid var(--border);
+      padding: 3px 7px;
+      border-radius: 999px;
+      backdrop-filter: blur(6px);
+      white-space: nowrap;
+    }
+
+    .empty{
+      color: var(--muted);
+      padding: 14px 10px 18px;
+      line-height: 1.45;
+      font-size: 13px;
+    }
+    .footer-note{
+      color: var(--muted);
+      font-size: 12px;
+      padding: 0 14px 14px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Historical novel ←——→ Period novel (Survey Visualizer)</h1>
+    <p>
+      Enter each reading and student responses (0–100). The app calculates averages, counts, and standard deviation,
+      and plots each reading on a 0–100 spectrum.
+    </p>
+  </header>
+
+  <main class="wrap">
+    <!-- Left: data entry + list -->
+    <section class="card" aria-label="Data entry">
+      <h2 id="formTitle">Add a reading</h2>
+      <div class="body">
+        <label for="titleInput">Reading title</label>
+        <input id="titleInput" type="text" placeholder="e.g., The Things They Carried" />
+
+        <label for="responsesInput">Responses (0–100)</label>
+        <textarea id="responsesInput" placeholder="Enter numbers separated by commas, spaces, or new lines.
+Example: 10, 25, 40 55
+70"></textarea>
+
+        <div class="row">
+          <button class="btn primary" id="saveBtn">Add reading</button>
+          <button class="btn ghost" id="cancelEditBtn" style="display:none;">Cancel edit</button>
+          <button class="btn" id="seedBtn" title="Adds a few example readings">Load sample data</button>
+          <button class="btn danger" id="clearBtn" title="Clears all readings">Clear all</button>
+        </div>
+
+        <div class="hint">
+          Tips:
+          <ul>
+            <li>Responses outside <span class="pill">0–100</span> are ignored.</li>
+            <li>Non-numeric text is ignored (so you can paste messy lists).</li>
+            <li>Data is saved locally in your browser (localStorage).</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2>Readings</h2>
+      <div class="list" id="readingList" aria-label="Reading list"></div>
+      <div class="footer-note">
+        Privacy: nothing is uploaded anywhere—this runs entirely in your browser.
+      </div>
+    </section>
+
+    <!-- Right: visualization -->
+    <section class="card" aria-label="Visualization">
+      <div class="spectrum-header">
+        <h2>Spectrum plot</h2>
+        <div class="legend" aria-label="Legend">
+          <span><span class="band"></span>±1 SD</span>
+          <span><span class="dot"></span>Average</span>
+        </div>
+      </div>
+
+      <div class="chart">
+        <div class="axis" aria-hidden="true">
+          <div class="axisline"></div>
+          <div class="ticks">
+            <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+          </div>
+          <div class="axislabels">
+            <span>Historical novel</span>
+            <span>Period novel</span>
+          </div>
+        </div>
+
+        <div class="plot" id="plotArea"></div>
+        <div class="empty" id="emptyState" style="display:none;">
+          No readings yet. Add one on the left (or click <b>Load sample data</b>) to see the visualization.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /**
+     * Data model:
+     * readings = [{ id: string, title: string, responses: number[] }]
+     */
+    const STORAGE_KEY = "reading-spectrum-v1";
+
+    const els = {
+      formTitle: document.getElementById("formTitle"),
+      titleInput: document.getElementById("titleInput"),
+      responsesInput: document.getElementById("responsesInput"),
+      saveBtn: document.getElementById("saveBtn"),
+      cancelEditBtn: document.getElementById("cancelEditBtn"),
+      seedBtn: document.getElementById("seedBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      readingList: document.getElementById("readingList"),
+      plotArea: document.getElementById("plotArea"),
+      emptyState: document.getElementById("emptyState"),
+    };
+
+    let readings = loadReadings();
+    let editingId = null;
+
+    function uid(){
+      return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+    }
+
+    function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+
+    function parseResponses(text){
+      // Pull out numeric tokens from anything the user pastes.
+      const tokens = text
+        .replace(/[\t;]/g, " ")
+        .split(/[\s,]+/g)
+        .map(t => t.trim())
+        .filter(Boolean);
+
+      const nums = [];
+      for (const t of tokens){
+        const v = Number(t);
+        if (Number.isFinite(v) && v >= 0 && v <= 100) nums.push(v);
+      }
+      return nums;
+    }
+
+    function mean(arr){
+      if (!arr.length) return NaN;
+      return arr.reduce((a,b)=>a+b,0) / arr.length;
+    }
+
+    // Sample standard deviation (n-1). If n<2, sd = 0.
+    function stdev(arr){
+      if (arr.length < 2) return 0;
+      const m = mean(arr);
+      const variance = arr.reduce((acc, x) => acc + (x - m) ** 2, 0) / (arr.length - 1);
+      return Math.sqrt(variance);
+    }
+
+    function saveReadings(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(readings));
+    }
+
+    function loadReadings(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        // Defensive cleanup
+        return parsed.map(r => ({
+          id: String(r.id ?? uid()),
+          title: String(r.title ?? "Untitled"),
+          responses: Array.isArray(r.responses) ? r.responses.filter(x => Number.isFinite(x) && x >= 0 && x <= 100) : []
+        }));
+      }catch{
+        return [];
+      }
+    }
+
+    function resetForm(){
+      editingId = null;
+      els.formTitle.textContent = "Add a reading";
+      els.saveBtn.textContent = "Add reading";
+      els.cancelEditBtn.style.display = "none";
+      els.titleInput.value = "";
+      els.responsesInput.value = "";
+      els.titleInput.focus();
+    }
+
+    function startEdit(id){
+      const r = readings.find(x => x.id === id);
+      if (!r) return;
+
+      editingId = id;
+      els.formTitle.textContent = "Edit reading";
+      els.saveBtn.textContent = "Save changes";
+      els.cancelEditBtn.style.display = "inline-block";
+
+      els.titleInput.value = r.title;
+      els.responsesInput.value = r.responses.join(", ");
+      els.titleInput.focus();
+    }
+
+    function deleteReading(id){
+      const r = readings.find(x => x.id === id);
+      if (!r) return;
+      if (!confirm(`Delete "${r.title}"?`)) return;
+
+      readings = readings.filter(x => x.id !== id);
+      if (editingId === id) resetForm();
+      saveReadings();
+      render();
+    }
+
+    function upsertFromForm(){
+      const title = els.titleInput.value.trim();
+      const responses = parseResponses(els.responsesInput.value);
+
+      if (!title){
+        alert("Please enter a reading title.");
+        return;
+      }
+      if (responses.length === 0){
+        alert("Please enter at least one valid response (a number between 0 and 100).");
+        return;
+      }
+
+      if (editingId){
+        const idx = readings.findIndex(r => r.id === editingId);
+        if (idx !== -1){
+          readings[idx] = { ...readings[idx], title, responses };
+        }
+      }else{
+        readings.unshift({ id: uid(), title, responses });
+      }
+
+      saveReadings();
+      render();
+      resetForm();
+    }
+
+    function seedSample(){
+      const sample = [
+        { title: "Reading A (sample)", responses: [12, 18, 22, 30, 25, 28, 35] },
+        { title: "Reading B (sample)", responses: [55, 60, 48, 52, 63, 57] },
+        { title: "Reading C (sample)", responses: [78, 82, 90, 74, 88, 80, 85, 79] },
+      ].map(r => ({ ...r, id: uid() }));
+
+      readings = sample.concat(readings);
+      saveReadings();
+      render();
+    }
+
+    function clearAll(){
+      if (!readings.length) return;
+      if (!confirm("Clear ALL readings? This cannot be undone.")) return;
+      readings = [];
+      saveReadings();
+      render();
+      resetForm();
+    }
+
+    function renderList(){
+      els.readingList.innerHTML = "";
+
+      if (!readings.length){
+        const div = document.createElement("div");
+        div.className = "empty";
+        div.textContent = "No readings yet.";
+        els.readingList.appendChild(div);
+        return;
+      }
+
+      for (const r of readings){
+        const m = mean(r.responses);
+        const sd = stdev(r.responses);
+
+        const item = document.createElement("div");
+        item.className = "item";
+
+        const top = document.createElement("div");
+        top.className = "top";
+
+        const left = document.createElement("div");
+        const title = document.createElement("p");
+        title.className = "title";
+        title.textContent = r.title;
+
+        const meta = document.createElement("p");
+        meta.className = "meta";
+        meta.textContent = `Avg: ${m.toFixed(1)} • n=${r.responses.length} • SD: ${sd.toFixed(1)}`;
+
+        left.appendChild(title);
+        left.appendChild(meta);
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+
+        const editBtn = document.createElement("button");
+        editBtn.className = "btn small";
+        editBtn.textContent = "Edit";
+        editBtn.addEventListener("click", () => startEdit(r.id));
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "btn small danger";
+        delBtn.textContent = "Delete";
+        delBtn.addEventListener("click", () => deleteReading(r.id));
+
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+
+        top.appendChild(left);
+        top.appendChild(actions);
+
+        item.appendChild(top);
+        els.readingList.appendChild(item);
+      }
+    }
+
+    function renderPlot(){
+      els.plotArea.innerHTML = "";
+
+      els.emptyState.style.display = readings.length ? "none" : "block";
+      if (!readings.length) return;
+
+      // Sort by average (optional, makes chart easier to scan)
+      const sorted = [...readings].sort((a,b) => mean(a.responses) - mean(b.responses));
+
+      for (const r of sorted){
+        const m = mean(r.responses);
+        const sd = stdev(r.responses);
+
+        // SD band is mean ± sd, clamped to [0,100]
+        const bandL = clamp(m - sd, 0, 100);
+        const bandR = clamp(m + sd, 0, 100);
+
+        const row = document.createElement("div");
+        row.className = "plotrow";
+
+        const head = document.createElement("div");
+        head.className = "rowhead";
+
+        const rtitle = document.createElement("p");
+        rtitle.className = "rtitle";
+        rtitle.textContent = r.title;
+
+        const rstats = document.createElement("div");
+        rstats.className = "rstats";
+        rstats.textContent = `Avg ${m.toFixed(1)} • n=${r.responses.length} • SD ${sd.toFixed(1)}`;
+
+        head.appendChild(rtitle);
+        head.appendChild(rstats);
+
+        const track = document.createElement("div");
+        track.className = "track";
+
+        const band = document.createElement("div");
+        band.className = "sdBand";
+        band.style.left = `${bandL}%`;
+        band.style.width = `${Math.max(0, bandR - bandL)}%`;
+
+        const dot = document.createElement("div");
+        dot.className = "avgDot";
+        dot.style.left = `${clamp(m, 0, 100)}%`;
+        dot.title = `Average: ${m.toFixed(2)}`;
+
+        const label = document.createElement("div");
+        label.className = "avgLabel";
+        label.style.left = `${clamp(m, 0, 100)}%`;
+        label.textContent = `${m.toFixed(1)}`;
+
+        track.appendChild(band);
+        track.appendChild(dot);
+        track.appendChild(label);
+
+        row.appendChild(head);
+        row.appendChild(track);
+
+        els.plotArea.appendChild(row);
+      }
+    }
+
+    function render(){
+      renderList();
+      renderPlot();
+    }
+
+    // Wire up events
+    els.saveBtn.addEventListener("click", upsertFromForm);
+    els.cancelEditBtn.addEventListener("click", resetForm);
+    els.seedBtn.addEventListener("click", seedSample);
+    els.clearBtn.addEventListener("click", clearAll);
+
+    // Initial render
+    render();
+  </script>
+</body>
+</html>
